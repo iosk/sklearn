@@ -55,7 +55,7 @@ __all__ = ["DecisionTreeClassifier",
 DTYPE = _tree.DTYPE
 DOUBLE = _tree.DOUBLE
 
-CRITERIA_CLF = {"gini": _criterion.Gini, "entropy": _criterion.Entropy}
+CRITERIA_CLF = {"gini": _criterion.Gini, "entropy": _criterion.Entropy, "regret": _criterion.Regret}
 CRITERIA_REG = {"mse": _criterion.MSE, "friedman_mse": _criterion.FriedmanMSE}
 
 DENSE_SPLITTERS = {"best": _splitter.BestSplitter,
@@ -101,17 +101,19 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
         self.max_leaf_nodes = max_leaf_nodes
         self.class_weight = class_weight
         self.presort = presort
+      
 
         self.n_features_ = None
         self.n_outputs_ = None
         self.classes_ = None
         self.n_classes_ = None
+        
 
         self.tree_ = None
         self.max_features_ = None
 
     def fit(self, X, y, sample_weight=None, check_input=True,
-            X_idx_sorted=None):
+            X_idx_sorted=None, r=None):
         """Build a decision tree from the training set (X, y).
 
         Parameters
@@ -142,12 +144,39 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
             are grown on the same dataset, this allows the ordering to be
             cached between trees. If None, the data will be sorted here.
             Don't use this parameter unless you know what to do.
+        
+        r : array-like, shape = [n_samples, n_outputs]
+            The regret value of each class for each training Example.
+            This is to be used for the pythia project
 
         Returns
         -------
         self : object
             Returns self.
         """
+
+        ### Next lines refer to the regret measure, added by iosk
+        if r is not None:
+            r = np.atleast_1d(r)
+
+            if r.ndim == 1:
+                # reshape is necessary to preserve the data contiguity against vs
+                # [:, np.newaxis] that does not.
+                r = np.reshape(r, (-1, 1))
+            # Make regrets an attribute
+            if getattr(r, "dtype", None) != DOUBLE or not r.flags.contiguous:
+                r = np.ascontiguousarray(r, dtype=DOUBLE)
+
+            # for k in range(self.n_outputs_):
+            #     classes_k, r_encoded[:, k] = np.unique(r[:, k],
+            #                                            return_inverse=True)
+            #     #self.classes_.append(classes_k)
+            #     #self.n_classes_.append(classes_k.shape[0])
+            # r = r_encoded
+        self.regrets_ = r
+        ### end iosk
+
+            
 
         random_state = check_random_state(self.random_state)
         if check_input:
@@ -165,6 +194,7 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
         is_classification = isinstance(self, ClassifierMixin)
 
         y = np.atleast_1d(y)
+
         expanded_class_weight = None
 
         if y.ndim == 1:
@@ -172,11 +202,13 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
             # [:, np.newaxis] that does not.
             y = np.reshape(y, (-1, 1))
 
+
         self.n_outputs_ = y.shape[1]
 
         if is_classification:
             check_classification_targets(y)
             y = np.copy(y)
+
 
             self.classes_ = []
             self.n_classes_ = []
@@ -184,6 +216,7 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
             if self.class_weight is not None:
                 y_original = np.copy(y)
 
+            # This encodes y to be a list of integers. for regret we dont want it.
             y_encoded = np.zeros(y.shape, dtype=np.int)
             for k in range(self.n_outputs_):
                 classes_k, y_encoded[:, k] = np.unique(y[:, k],
@@ -204,6 +237,7 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
 
         if getattr(y, "dtype", None) != DOUBLE or not y.flags.contiguous:
             y = np.ascontiguousarray(y, dtype=DOUBLE)
+
 
         # Check parameters
         max_depth = ((2 ** 31) - 1 if self.max_depth is None
@@ -364,8 +398,8 @@ class BaseDecisionTree(six.with_metaclass(ABCMeta, BaseEstimator,
                                            min_weight_leaf,
                                            max_depth,
                                            max_leaf_nodes)
-
-        builder.build(self.tree_, X, y, sample_weight, X_idx_sorted)
+        # r has to come here as well
+        builder.build(self.tree_, X, y, r, sample_weight, X_idx_sorted)
 
         if self.n_outputs_ == 1:
             self.n_classes_ = self.n_classes_[0]

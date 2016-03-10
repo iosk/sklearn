@@ -92,6 +92,8 @@ cdef class Splitter:
         self.n_features = 0
         self.feature_values = NULL
 
+        self.r = NULL
+        self.r_stride = 0
         self.y = NULL
         self.y_stride = 0
         self.sample_weight = NULL
@@ -119,6 +121,7 @@ cdef class Splitter:
     cdef void init(self,
                    object X,
                    np.ndarray[DOUBLE_t, ndim=2, mode="c"] y,
+                   np.ndarray[DOUBLE_t, ndim=2, mode="c"] r,
                    DOUBLE_t* sample_weight,
                    np.ndarray X_idx_sorted=None) except *:
         """Initialize the splitter.
@@ -137,6 +140,9 @@ cdef class Splitter:
             The weights of the samples, where higher weighted samples are fit
             closer than lower weight samples. If not provided, all samples
             are assumed to have uniform weight.
+
+        r: numpy.ndarray, dtype=DOUBLE_t
+            This is the vector of regrets per sample (iosk)
         """
 
         self.rand_r_state = self.random_state.randint(0, RAND_R_MAX)
@@ -177,7 +183,10 @@ cdef class Splitter:
         safe_realloc(&self.constant_features, n_features)
 
         self.y = <DOUBLE_t*> y.data
+        self.r = <DOUBLE_t*> r.data
+
         self.y_stride = <SIZE_t> y.strides[0] / <SIZE_t> y.itemsize
+        self.r_stride = <SIZE_t> r.strides[0] / <SIZE_t> r.itemsize
 
         self.sample_weight = sample_weight
 
@@ -199,7 +208,9 @@ cdef class Splitter:
         self.end = end
 
         self.criterion.init(self.y,
+                            self.r,
                             self.y_stride,
+                            self.r_stride,
                             self.sample_weight,
                             self.weighted_n_samples,
                             self.samples,
@@ -260,12 +271,13 @@ cdef class BaseDenseSplitter(Splitter):
     cdef void init(self,
                    object X,
                    np.ndarray[DOUBLE_t, ndim=2, mode="c"] y,
+                   np.ndarray[DOUBLE_t, ndim=2, mode="c"] r,
                    DOUBLE_t* sample_weight,
                    np.ndarray X_idx_sorted=None) except *:
         """Initialize the splitter."""
 
         # Call parent init
-        Splitter.init(self, X, y, sample_weight)
+        Splitter.init(self, X, y, r, sample_weight)
 
         # Initialize X
         cdef np.ndarray X_ndarray = X
@@ -868,12 +880,13 @@ cdef class BaseSparseSplitter(Splitter):
     cdef void init(self,
                    object X,
                    np.ndarray[DOUBLE_t, ndim=2, mode="c"] y,
+                   np.ndarray[DOUBLE_t, ndim=2, mode="c"] r,
                    DOUBLE_t* sample_weight,
                    np.ndarray X_idx_sorted=None) except *:
         """Initialize the splitter."""
 
         # Call parent init
-        Splitter.init(self, X, y, sample_weight)
+        Splitter.init(self, X, y, r, sample_weight)
 
         if not isinstance(X, csc_matrix):
             raise ValueError("X should be in csc format")

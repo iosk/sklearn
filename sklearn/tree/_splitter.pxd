@@ -61,7 +61,9 @@ cdef class Splitter:
                                          # allowed on dense data
 
     cdef DOUBLE_t* y
+    cdef DOUBLE_t* r
     cdef SIZE_t y_stride
+    cdef SIZE_t r_stride
     cdef DOUBLE_t* sample_weight
 
     # The samples vector `samples` is maintained by the Splitter object such
@@ -81,7 +83,7 @@ cdef class Splitter:
     # This allows optimization with depth-based tree building.
 
     # Methods
-    cdef void init(self, object X, np.ndarray y,
+    cdef void init(self, object X, np.ndarray y, np.ndarray r,
                    DOUBLE_t* sample_weight,
                    np.ndarray X_idx_sorted=*) except *
 

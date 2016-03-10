@@ -26,7 +26,11 @@ cdef class Criterion:
     # Internal structures
     cdef DOUBLE_t* y                     # Values of y
     cdef SIZE_t y_stride                 # Stride in y (since n_outputs >= 1)
+    cdef SIZE_t r_stride                 # Stride in r (since n_outputs >= 1)
+
     cdef DOUBLE_t* sample_weight         # Sample weights
+    cdef DOUBLE_t* r  
+
 
     cdef SIZE_t* samples                 # Sample indices in X, y
     cdef SIZE_t start                    # samples[start:pos] are the samples in the left node
@@ -48,11 +52,15 @@ cdef class Criterion:
     cdef double* sum_left           # Same as above, but for the left side of the split
     cdef double* sum_right          # same as above, but for the right side of the split
 
+    cdef double* reg_total
+    cdef double* reg_left           
+    cdef double* reg_right 
+
     # The criterion object is maintained such that left and right collected
     # statistics correspond to samples[start:pos] and samples[pos:end].
 
     # Methods
-    cdef void init(self, DOUBLE_t* y, SIZE_t y_stride, DOUBLE_t* sample_weight,
+    cdef void init(self, DOUBLE_t* y, DOUBLE_t* r, SIZE_t y_stride, SIZE_t r_stride, DOUBLE_t* sample_weight,
                    double weighted_n_samples, SIZE_t* samples, SIZE_t start,
                    SIZE_t end) nogil
     cdef void reset(self) nogil
